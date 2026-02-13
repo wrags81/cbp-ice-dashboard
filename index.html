@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CBP & ICE FY26 Contract Spending Dashboard</title>
+    <title>CBP & ICE Contract Spending Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <style>
@@ -31,6 +31,22 @@
         .header p {
             opacity: 0.9;
             font-size: 0.95rem;
+        }
+        .fy-selector {
+            margin-top: 1rem;
+        }
+        .fy-selector select {
+            font-size: 1.1rem;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            background: white;
+            color: #1a365d;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .fy-selector select:hover {
+            background: #edf2f7;
         }
         .container {
             max-width: 1400px;
@@ -206,6 +222,38 @@
             flex-wrap: wrap;
             gap: 1rem;
         }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+        .loading-overlay.hidden {
+            display: none;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #3182ce;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loading-text {
+            margin-top: 1rem;
+            color: #4a5568;
+            font-size: 1.1rem;
+        }
         @media (max-width: 768px) {
             .charts-grid {
                 grid-template-columns: 1fr;
@@ -217,9 +265,24 @@
     </style>
 </head>
 <body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading <span id="loadingFY">FY26</span> data...</div>
+    </div>
+
     <div class="header">
-        <h1>CBP & ICE FY26 Contract Spending Dashboard</h1>
-        <p>Federal Action Obligations | Data Source: USAspending.gov | Last Updated: <span id="lastUpdated">Loading...</span></p>
+        <h1>CBP & ICE Contract Spending Dashboard</h1>
+        <p>Federal Action Obligations | Data Source: USAspending.gov</p>
+        <div class="fy-selector">
+            <select id="fySelect" onchange="changeFiscalYear()">
+                <option value="2026">FY 2026 (Oct 2025 - Sep 2026)</option>
+                <option value="2025">FY 2025 (Oct 2024 - Sep 2025)</option>
+                <option value="2024">FY 2024 (Oct 2023 - Sep 2024)</option>
+                <option value="2023">FY 2023 (Oct 2022 - Sep 2023)</option>
+                <option value="2022">FY 2022 (Oct 2021 - Sep 2022)</option>
+                <option value="2021">FY 2021 (Oct 2020 - Sep 2021)</option>
+            </select>
+        </div>
     </div>
 
     <div class="container">
@@ -305,7 +368,7 @@
 
     <div class="footer">
         <p>Data sourced from <a href="https://usaspending.gov" target="_blank">USAspending.gov</a> API</p>
-        <p>FY26: October 1, 2025 - September 30, 2026</p>
+        <p id="fyDateRange">FY26: October 1, 2025 - September 30, 2026</p>
     </div>
 
     <script>
@@ -313,6 +376,35 @@
         let filteredData = [];
         let currentFilter = 'all';
         let displayedRows = 50;
+        let currentFY = '2026';
+
+        // Chart instances for cleanup
+        let monthlyChartInstance = null;
+        let agencyChartInstance = null;
+        let cbpRecipientsChartInstance = null;
+        let iceRecipientsChartInstance = null;
+
+        // Fiscal year date ranges
+        const fyDates = {
+            '2026': { start: '2025-10-01', end: '2026-09-30', label: 'FY26: October 1, 2025 - September 30, 2026' },
+            '2025': { start: '2024-10-01', end: '2025-09-30', label: 'FY25: October 1, 2024 - September 30, 2025' },
+            '2024': { start: '2023-10-01', end: '2024-09-30', label: 'FY24: October 1, 2023 - September 30, 2024' },
+            '2023': { start: '2022-10-01', end: '2023-09-30', label: 'FY23: October 1, 2022 - September 30, 2023' },
+            '2022': { start: '2021-10-01', end: '2022-09-30', label: 'FY22: October 1, 2021 - September 30, 2022' },
+            '2021': { start: '2020-10-01', end: '2021-09-30', label: 'FY21: October 1, 2020 - September 30, 2021' }
+        };
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('hidden', !show);
+        }
+
+        function changeFiscalYear() {
+            const select = document.getElementById('fySelect');
+            currentFY = select.value;
+            document.getElementById('loadingFY').textContent = 'FY' + currentFY.slice(-2);
+            document.getElementById('fyDateRange').textContent = fyDates[currentFY].label;
+            loadData();
+        }
 
         // Format currency
         function formatCurrency(num) {
@@ -333,26 +425,101 @@
             return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
-        // Load and parse CSV data
+        // Load data - try CSV first, fall back to API
         async function loadData() {
-            try {
-                const response = await fetch('data/CBP_ICE_FY26_Contract_Obligations_Itemized.csv');
-                const csvText = await response.text();
+            showLoading(true);
 
-                Papa.parse(csvText, {
-                    header: true,
-                    complete: function(results) {
-                        allData = results.data.filter(row => row.Agency && row['Federal Action Obligation']);
-                        processData();
-                    }
-                });
+            // Try to load from CSV file first
+            const csvFile = `data/CBP_ICE_FY${currentFY}_Contract_Obligations.csv`;
+
+            try {
+                const response = await fetch(csvFile);
+                if (response.ok) {
+                    const csvText = await response.text();
+                    Papa.parse(csvText, {
+                        header: true,
+                        complete: function(results) {
+                            allData = results.data.filter(row => row.Agency && row['Federal Action Obligation']);
+                            processData();
+                            showLoading(false);
+                        }
+                    });
+                    return;
+                }
             } catch (error) {
-                console.error('Error loading data:', error);
-                document.getElementById('tableBody').innerHTML = '<tr><td colspan="5">Error loading data. Please ensure data files are present.</td></tr>';
+                console.log('CSV not found, fetching from API...');
             }
+
+            // Fall back to API
+            await fetchFromAPI();
+        }
+
+        async function fetchFromAPI() {
+            const fy = fyDates[currentFY];
+            allData = [];
+
+            for (const agency of ['U.S. Customs and Border Protection', 'U.S. Immigration and Customs Enforcement']) {
+                const abbrev = agency.includes('Customs and Border') ? 'CBP' : 'ICE';
+                let page = 1;
+
+                while (true) {
+                    try {
+                        const response = await fetch('https://api.usaspending.gov/api/v2/search/spending_by_transaction/', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                filters: {
+                                    agencies: [{ type: 'awarding', tier: 'subtier', name: agency }],
+                                    time_period: [{ start_date: fy.start, end_date: fy.end }],
+                                    award_type_codes: ['A', 'B', 'C', 'D']
+                                },
+                                fields: ['Award ID', 'Recipient Name', 'Transaction Amount', 'Action Date',
+                                        'Transaction Description', 'product_or_service_description'],
+                                page: page,
+                                limit: 100,
+                                sort: 'Transaction Amount',
+                                order: 'desc'
+                            })
+                        });
+
+                        const data = await response.json();
+                        const results = data.results || [];
+
+                        results.forEach(r => {
+                            allData.push({
+                                Agency: abbrev,
+                                'Award ID': r['Award ID'],
+                                'Recipient Name': r['Recipient Name'],
+                                'Federal Action Obligation': r['Transaction Amount'],
+                                'Action Date': r['Action Date'],
+                                'Transaction Description': r['Transaction Description'],
+                                'Product/Service Description': r['product_or_service_description']
+                            });
+                        });
+
+                        if (!data.page_metadata?.hasNext || results.length === 0) break;
+                        page++;
+                    } catch (error) {
+                        console.error('API error:', error);
+                        break;
+                    }
+                }
+            }
+
+            processData();
+            showLoading(false);
+        }
+
+        function destroyCharts() {
+            if (monthlyChartInstance) { monthlyChartInstance.destroy(); monthlyChartInstance = null; }
+            if (agencyChartInstance) { agencyChartInstance.destroy(); agencyChartInstance = null; }
+            if (cbpRecipientsChartInstance) { cbpRecipientsChartInstance.destroy(); cbpRecipientsChartInstance = null; }
+            if (iceRecipientsChartInstance) { iceRecipientsChartInstance.destroy(); iceRecipientsChartInstance = null; }
         }
 
         function processData() {
+            destroyCharts();
+
             // Calculate totals
             let cbpTotal = 0, iceTotal = 0, cbpCount = 0, iceCount = 0;
             const cbpByRecipient = {}, iceByRecipient = {};
@@ -394,16 +561,19 @@
             document.getElementById('iceCount').textContent = `${iceCount.toLocaleString()} transactions`;
             document.getElementById('combinedTotal').textContent = formatCurrency(cbpTotal + iceTotal);
             document.getElementById('combinedCount').textContent = `${(cbpCount + iceCount).toLocaleString()} transactions`;
-            document.getElementById('lastUpdated').textContent = new Date().toLocaleDateString();
 
             // Create charts
             createMonthlyChart(monthlyData);
             createAgencyChart(cbpTotal, iceTotal);
-            createRecipientChart('cbpRecipientsChart', cbpByRecipient, '#3182ce');
-            createRecipientChart('iceRecipientsChart', iceByRecipient, '#e53e3e');
+            createRecipientChart('cbpRecipientsChart', cbpByRecipient, '#3182ce', 'cbp');
+            createRecipientChart('iceRecipientsChart', iceByRecipient, '#e53e3e', 'ice');
 
             // Populate table
             filteredData = [...allData];
+            currentFilter = 'all';
+            document.querySelectorAll('.tabs .tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+            document.getElementById('searchBox').value = '';
+            displayedRows = 50;
             renderTable();
         }
 
@@ -411,7 +581,7 @@
             const months = Object.keys(monthlyData).sort();
             const ctx = document.getElementById('monthlyChart').getContext('2d');
 
-            new Chart(ctx, {
+            monthlyChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: months,
@@ -462,7 +632,7 @@
         function createAgencyChart(cbpTotal, iceTotal) {
             const ctx = document.getElementById('agencyChart').getContext('2d');
 
-            new Chart(ctx, {
+            agencyChartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
                     labels: ['CBP', 'ICE'],
@@ -490,14 +660,14 @@
             });
         }
 
-        function createRecipientChart(canvasId, recipientData, color) {
+        function createRecipientChart(canvasId, recipientData, color, type) {
             const sorted = Object.entries(recipientData)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 10);
 
             const ctx = document.getElementById(canvasId).getContext('2d');
 
-            new Chart(ctx, {
+            const chart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: sorted.map(r => r[0].length > 25 ? r[0].substring(0, 25) + '...' : r[0]),
@@ -535,11 +705,17 @@
                     }
                 }
             });
+
+            if (type === 'cbp') {
+                cbpRecipientsChartInstance = chart;
+            } else {
+                iceRecipientsChartInstance = chart;
+            }
         }
 
         function showTable(filter) {
             currentFilter = filter;
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
             filterTable();
         }
@@ -564,6 +740,13 @@
         function renderTable() {
             const tbody = document.getElementById('tableBody');
             const toShow = filteredData.slice(0, displayedRows);
+
+            if (toShow.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="loading">No transactions found</td></tr>';
+                document.getElementById('showingCount').textContent = '';
+                document.getElementById('loadMoreBtn').style.display = 'none';
+                return;
+            }
 
             tbody.innerHTML = toShow.map(row => {
                 const amount = parseFloat(row['Federal Action Obligation']) || 0;
