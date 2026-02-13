@@ -51,7 +51,8 @@ def fetch_transactions(agency_name, agency_abbrev, fy_start, fy_end):
             "fields": [
                 "Award ID", "Recipient Name", "Transaction Amount",
                 "Action Date", "Awarding Sub Agency", "Transaction Description",
-                "Mod", "product_or_service_description", "naics_description"
+                "Mod", "product_or_service_description", "naics_description",
+                "generated_internal_id"
             ],
             "page": page,
             "limit": 100,
@@ -87,7 +88,7 @@ def save_to_csv(cbp_data, ice_data, fiscal_year):
         writer.writerow([
             "Agency", "Award ID", "Recipient Name", "Federal Action Obligation",
             "Action Date", "Modification", "Product/Service Description",
-            "NAICS Description", "Transaction Description"
+            "NAICS Description", "Transaction Description", "Generated Award ID"
         ])
 
         for t in cbp_data:
@@ -95,7 +96,8 @@ def save_to_csv(cbp_data, ice_data, fiscal_year):
                 "CBP", t.get("Award ID", ""), t.get("Recipient Name", ""),
                 t.get("Transaction Amount", 0), t.get("Action Date", ""),
                 t.get("Mod", ""), t.get("product_or_service_description", ""),
-                t.get("naics_description", ""), t.get("Transaction Description", "")
+                t.get("naics_description", ""), t.get("Transaction Description", ""),
+                t.get("generated_internal_id", "")
             ])
 
         for t in ice_data:
@@ -103,7 +105,8 @@ def save_to_csv(cbp_data, ice_data, fiscal_year):
                 "ICE", t.get("Award ID", ""), t.get("Recipient Name", ""),
                 t.get("Transaction Amount", 0), t.get("Action Date", ""),
                 t.get("Mod", ""), t.get("product_or_service_description", ""),
-                t.get("naics_description", ""), t.get("Transaction Description", "")
+                t.get("naics_description", ""), t.get("Transaction Description", ""),
+                t.get("generated_internal_id", "")
             ])
 
     return csv_path

@@ -981,10 +981,10 @@
                 const description = row['Transaction Description'] || row['Product/Service Description'] || '';
                 const psc = row['Product/Service Description'] || '';
                 const naics = row['NAICS Description'] || '';
-                const awardId = row['Award ID'] || '';
+                const generatedAwardId = row['Generated Award ID'] || '';
 
-                // Build USAspending link
-                const usaSpendingLink = awardId ? `https://www.usaspending.gov/award/${encodeURIComponent(awardId)}` : '';
+                // Build USAspending link using generated award ID
+                const usaSpendingLink = generatedAwardId ? `https://www.usaspending.gov/award/${encodeURIComponent(generatedAwardId)}` : '';
 
                 return `<tr>
                     <td><span class="agency-badge ${agencyClass}">${row.Agency}</span></td>
@@ -1083,11 +1083,11 @@
 
             const headers = ['Agency', 'Award ID', 'Recipient Name', 'Federal Action Obligation', 'Action Date', 'PSC Description', 'NAICS Description', 'Transaction Description', 'USAspending Link'];
             const rows = allData.map(row => {
-                const awardId = row['Award ID'] || '';
-                const link = awardId ? `https://www.usaspending.gov/award/${encodeURIComponent(awardId)}` : '';
+                const generatedAwardId = row['Generated Award ID'] || '';
+                const link = generatedAwardId ? `https://www.usaspending.gov/award/${encodeURIComponent(generatedAwardId)}` : '';
                 return [
                     row.Agency || '',
-                    awardId,
+                    row['Award ID'] || '',
                     `"${(row['Recipient Name'] || '').replace(/"/g, '""')}"`,
                     row['Federal Action Obligation'] || 0,
                     row['Action Date'] || '',
