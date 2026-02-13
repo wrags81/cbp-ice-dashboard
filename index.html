@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CBP & ICE FY26 Contract Spending Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        .header p {
+            opacity: 0.9;
+            font-size: 0.95rem;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .card.cbp {
+            border-left: 4px solid #3182ce;
+        }
+        .card.ice {
+            border-left: 4px solid #e53e3e;
+        }
+        .card.total {
+            border-left: 4px solid #38a169;
+        }
+        .card h3 {
+            font-size: 0.85rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+        .card .amount {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1a365d;
+        }
+        .card .count {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .chart-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .chart-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: #1a365d;
+        }
+        .chart-container {
+            position: relative;
+            height: 350px;
+        }
+        .table-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 2rem;
+        }
+        .table-section h3 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: #1a365d;
+        }
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .tab {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: #e2e8f0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .tab:hover {
+            background: #cbd5e0;
+        }
+        .tab.active {
+            background: #3182ce;
+            color: white;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background: #f7fafc;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #4a5568;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td {
+            font-size: 0.9rem;
+        }
+        tr:hover {
+            background: #f7fafc;
+        }
+        .amount-cell {
+            font-family: 'SF Mono', Monaco, monospace;
+            text-align: right;
+        }
+        .positive {
+            color: #38a169;
+        }
+        .negative {
+            color: #e53e3e;
+        }
+        .agency-badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .agency-badge.cbp {
+            background: #ebf8ff;
+            color: #2b6cb0;
+        }
+        .agency-badge.ice {
+            background: #fff5f5;
+            color: #c53030;
+        }
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+            font-size: 0.85rem;
+        }
+        .footer a {
+            color: #3182ce;
+        }
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+        .search-box {
+            padding: 0.5rem 1rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            width: 300px;
+            font-size: 0.9rem;
+        }
+        .table-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            .chart-container {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>CBP & ICE FY26 Contract Spending Dashboard</h1>
+        <p>Federal Action Obligations | Data Source: USAspending.gov | Last Updated: <span id="lastUpdated">Loading...</span></p>
+    </div>
+
+    <div class="container">
+        <div class="summary-cards">
+            <div class="card cbp">
+                <h3>CBP Total Obligations</h3>
+                <div class="amount" id="cbpTotal">Loading...</div>
+                <div class="count" id="cbpCount"></div>
+            </div>
+            <div class="card ice">
+                <h3>ICE Total Obligations</h3>
+                <div class="amount" id="iceTotal">Loading...</div>
+                <div class="count" id="iceCount"></div>
+            </div>
+            <div class="card total">
+                <h3>Combined Total</h3>
+                <div class="amount" id="combinedTotal">Loading...</div>
+                <div class="count" id="combinedCount"></div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>Monthly Obligations Trend</h3>
+                <div class="chart-container">
+                    <canvas id="monthlyChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Agency Comparison</h3>
+                <div class="chart-container">
+                    <canvas id="agencyChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>Top 10 CBP Recipients</h3>
+                <div class="chart-container">
+                    <canvas id="cbpRecipientsChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Top 10 ICE Recipients</h3>
+                <div class="chart-container">
+                    <canvas id="iceRecipientsChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-section">
+            <div class="table-controls">
+                <div class="tabs">
+                    <button class="tab active" onclick="showTable('all')">All Transactions</button>
+                    <button class="tab" onclick="showTable('cbp')">CBP Only</button>
+                    <button class="tab" onclick="showTable('ice')">ICE Only</button>
+                </div>
+                <input type="text" class="search-box" id="searchBox" placeholder="Search recipient, description..." oninput="filterTable()">
+            </div>
+            <div style="overflow-x: auto;">
+                <table id="transactionsTable">
+                    <thead>
+                        <tr>
+                            <th>Agency</th>
+                            <th>Recipient</th>
+                            <th style="text-align: right;">Obligation Amount</th>
+                            <th>Date</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr><td colspan="5" class="loading">Loading data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div style="margin-top: 1rem; text-align: center;">
+                <button class="tab" id="loadMoreBtn" onclick="loadMore()" style="display: none;">Load More</button>
+                <span id="showingCount" style="color: #666; font-size: 0.85rem;"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Data sourced from <a href="https://usaspending.gov" target="_blank">USAspending.gov</a> API</p>
+        <p>FY26: October 1, 2025 - September 30, 2026</p>
+    </div>
+
+    <script>
+        let allData = [];
+        let filteredData = [];
+        let currentFilter = 'all';
+        let displayedRows = 50;
+
+        // Format currency
+        function formatCurrency(num) {
+            if (num === null || num === undefined) return '$0.00';
+            const absNum = Math.abs(num);
+            if (absNum >= 1e9) {
+                return (num < 0 ? '-' : '') + '$' + (absNum / 1e9).toFixed(2) + 'B';
+            } else if (absNum >= 1e6) {
+                return (num < 0 ? '-' : '') + '$' + (absNum / 1e6).toFixed(2) + 'M';
+            } else if (absNum >= 1e3) {
+                return (num < 0 ? '-' : '') + '$' + (absNum / 1e3).toFixed(1) + 'K';
+            }
+            return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatFullCurrency(num) {
+            if (num === null || num === undefined) return '$0.00';
+            return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // Load and parse CSV data
+        async function loadData() {
+            try {
+                const response = await fetch('data/CBP_ICE_FY26_Contract_Obligations_Itemized.csv');
+                const csvText = await response.text();
+
+                Papa.parse(csvText, {
+                    header: true,
+                    complete: function(results) {
+                        allData = results.data.filter(row => row.Agency && row['Federal Action Obligation']);
+                        processData();
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('tableBody').innerHTML = '<tr><td colspan="5">Error loading data. Please ensure data files are present.</td></tr>';
+            }
+        }
+
+        function processData() {
+            // Calculate totals
+            let cbpTotal = 0, iceTotal = 0, cbpCount = 0, iceCount = 0;
+            const cbpByRecipient = {}, iceByRecipient = {};
+            const monthlyData = {};
+
+            allData.forEach(row => {
+                const amount = parseFloat(row['Federal Action Obligation']) || 0;
+                const agency = row.Agency;
+                const recipient = row['Recipient Name'] || 'Unknown';
+                const date = row['Action Date'] || '';
+                const month = date.substring(0, 7);
+
+                if (agency === 'CBP') {
+                    cbpTotal += amount;
+                    cbpCount++;
+                    cbpByRecipient[recipient] = (cbpByRecipient[recipient] || 0) + amount;
+                } else if (agency === 'ICE') {
+                    iceTotal += amount;
+                    iceCount++;
+                    iceByRecipient[recipient] = (iceByRecipient[recipient] || 0) + amount;
+                }
+
+                if (month) {
+                    if (!monthlyData[month]) {
+                        monthlyData[month] = { cbp: 0, ice: 0 };
+                    }
+                    if (agency === 'CBP') {
+                        monthlyData[month].cbp += amount;
+                    } else if (agency === 'ICE') {
+                        monthlyData[month].ice += amount;
+                    }
+                }
+            });
+
+            // Update summary cards
+            document.getElementById('cbpTotal').textContent = formatCurrency(cbpTotal);
+            document.getElementById('cbpCount').textContent = `${cbpCount.toLocaleString()} transactions`;
+            document.getElementById('iceTotal').textContent = formatCurrency(iceTotal);
+            document.getElementById('iceCount').textContent = `${iceCount.toLocaleString()} transactions`;
+            document.getElementById('combinedTotal').textContent = formatCurrency(cbpTotal + iceTotal);
+            document.getElementById('combinedCount').textContent = `${(cbpCount + iceCount).toLocaleString()} transactions`;
+            document.getElementById('lastUpdated').textContent = new Date().toLocaleDateString();
+
+            // Create charts
+            createMonthlyChart(monthlyData);
+            createAgencyChart(cbpTotal, iceTotal);
+            createRecipientChart('cbpRecipientsChart', cbpByRecipient, '#3182ce');
+            createRecipientChart('iceRecipientsChart', iceByRecipient, '#e53e3e');
+
+            // Populate table
+            filteredData = [...allData];
+            renderTable();
+        }
+
+        function createMonthlyChart(monthlyData) {
+            const months = Object.keys(monthlyData).sort();
+            const ctx = document.getElementById('monthlyChart').getContext('2d');
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: months,
+                    datasets: [
+                        {
+                            label: 'CBP',
+                            data: months.map(m => monthlyData[m].cbp),
+                            borderColor: '#3182ce',
+                            backgroundColor: 'rgba(49, 130, 206, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'ICE',
+                            data: months.map(m => monthlyData[m].ice),
+                            borderColor: '#e53e3e',
+                            backgroundColor: 'rgba(229, 62, 62, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + formatCurrency(context.raw);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: function(value) {
+                                    return formatCurrency(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createAgencyChart(cbpTotal, iceTotal) {
+            const ctx = document.getElementById('agencyChart').getContext('2d');
+
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['CBP', 'ICE'],
+                    datasets: [{
+                        data: [cbpTotal, iceTotal],
+                        backgroundColor: ['#3182ce', '#e53e3e'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = cbpTotal + iceTotal;
+                                    const percentage = ((context.raw / total) * 100).toFixed(1);
+                                    return context.label + ': ' + formatCurrency(context.raw) + ' (' + percentage + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createRecipientChart(canvasId, recipientData, color) {
+            const sorted = Object.entries(recipientData)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            const ctx = document.getElementById(canvasId).getContext('2d');
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(r => r[0].length > 25 ? r[0].substring(0, 25) + '...' : r[0]),
+                    datasets: [{
+                        data: sorted.map(r => r[1]),
+                        backgroundColor: color,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    return sorted[context[0].dataIndex][0];
+                                },
+                                label: function(context) {
+                                    return formatCurrency(context.raw);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                callback: function(value) {
+                                    return formatCurrency(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function showTable(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            filterTable();
+        }
+
+        function filterTable() {
+            const searchTerm = document.getElementById('searchBox').value.toLowerCase();
+
+            filteredData = allData.filter(row => {
+                const matchesAgency = currentFilter === 'all' ||
+                    row.Agency.toLowerCase() === currentFilter;
+                const matchesSearch = !searchTerm ||
+                    (row['Recipient Name'] || '').toLowerCase().includes(searchTerm) ||
+                    (row['Transaction Description'] || '').toLowerCase().includes(searchTerm) ||
+                    (row['Product/Service Description'] || '').toLowerCase().includes(searchTerm);
+                return matchesAgency && matchesSearch;
+            });
+
+            displayedRows = 50;
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const toShow = filteredData.slice(0, displayedRows);
+
+            tbody.innerHTML = toShow.map(row => {
+                const amount = parseFloat(row['Federal Action Obligation']) || 0;
+                const amountClass = amount >= 0 ? 'positive' : 'negative';
+                const agencyClass = row.Agency.toLowerCase();
+                const description = row['Transaction Description'] || row['Product/Service Description'] || '';
+
+                return `<tr>
+                    <td><span class="agency-badge ${agencyClass}">${row.Agency}</span></td>
+                    <td>${row['Recipient Name'] || 'Unknown'}</td>
+                    <td class="amount-cell ${amountClass}">${formatFullCurrency(amount)}</td>
+                    <td>${row['Action Date'] || ''}</td>
+                    <td title="${description}">${description.length > 60 ? description.substring(0, 60) + '...' : description}</td>
+                </tr>`;
+            }).join('');
+
+            document.getElementById('showingCount').textContent =
+                `Showing ${Math.min(displayedRows, filteredData.length)} of ${filteredData.length} transactions`;
+
+            document.getElementById('loadMoreBtn').style.display =
+                displayedRows < filteredData.length ? 'inline-block' : 'none';
+        }
+
+        function loadMore() {
+            displayedRows += 50;
+            renderTable();
+        }
+
+        // Initialize
+        loadData();
+    </script>
+</body>
+</html>
