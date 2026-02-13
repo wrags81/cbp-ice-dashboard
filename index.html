@@ -177,6 +177,33 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 1.5rem;
+        }
+        th.sortable:hover {
+            background: #edf2f7;
+            color: #2d3748;
+        }
+        th.sortable::after {
+            content: '⇅';
+            position: absolute;
+            right: 0.5rem;
+            opacity: 0.3;
+            font-size: 0.75rem;
+        }
+        th.sortable.asc::after {
+            content: '↑';
+            opacity: 1;
+            color: #3182ce;
+        }
+        th.sortable.desc::after {
+            content: '↓';
+            opacity: 1;
+            color: #3182ce;
+        }
         td {
             font-size: 0.9rem;
         }
@@ -364,10 +391,10 @@
                 <table id="transactionsTable">
                     <thead>
                         <tr>
-                            <th>Agency</th>
-                            <th>Recipient</th>
-                            <th style="text-align: right;">Obligation Amount</th>
-                            <th>Date</th>
+                            <th class="sortable" data-sort="agency" onclick="sortTable('agency')">Agency</th>
+                            <th class="sortable" data-sort="recipient" onclick="sortTable('recipient')">Recipient</th>
+                            <th class="sortable" data-sort="amount" onclick="sortTable('amount')" style="text-align: right;">Obligation Amount</th>
+                            <th class="sortable" data-sort="date" onclick="sortTable('date')">Date</th>
                             <th>Description</th>
                         </tr>
                     </thead>
@@ -393,7 +420,8 @@
         let filteredData = [];
         let currentFilter = 'all';
         let displayedRows = 50;
-        let currentFY = '2026';
+        let currentFY = 'trump2';
+        let currentSort = { column: null, direction: 'asc' };
 
         // Chart instances for cleanup
         let monthlyChartInstance = null;
@@ -788,6 +816,11 @@
                 return matchesAgency && matchesSearch;
             });
 
+            // Apply current sort if any
+            if (currentSort.column) {
+                applySorting();
+            }
+
             displayedRows = 50;
             renderTable();
         }
@@ -828,6 +861,63 @@
         function loadMore() {
             displayedRows += 50;
             renderTable();
+        }
+
+        // Sort table by column
+        function sortTable(column) {
+            // Toggle direction if same column, otherwise start with ascending
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+
+            // Update header styles
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('asc', 'desc');
+                if (th.dataset.sort === column) {
+                    th.classList.add(currentSort.direction);
+                }
+            });
+
+            applySorting();
+            displayedRows = 50;
+            renderTable();
+        }
+
+        function applySorting() {
+            const col = currentSort.column;
+            const dir = currentSort.direction === 'asc' ? 1 : -1;
+
+            filteredData.sort((a, b) => {
+                let valA, valB;
+
+                switch (col) {
+                    case 'agency':
+                        valA = (a.Agency || '').toLowerCase();
+                        valB = (b.Agency || '').toLowerCase();
+                        break;
+                    case 'recipient':
+                        valA = (a['Recipient Name'] || '').toLowerCase();
+                        valB = (b['Recipient Name'] || '').toLowerCase();
+                        break;
+                    case 'amount':
+                        valA = parseFloat(a['Federal Action Obligation']) || 0;
+                        valB = parseFloat(b['Federal Action Obligation']) || 0;
+                        break;
+                    case 'date':
+                        valA = a['Action Date'] || '';
+                        valB = b['Action Date'] || '';
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (valA < valB) return -1 * dir;
+                if (valA > valB) return 1 * dir;
+                return 0;
+            });
         }
 
         // Export current data to CSV
