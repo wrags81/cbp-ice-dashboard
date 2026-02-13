@@ -235,6 +235,22 @@
             background: #fff5f5;
             color: #c53030;
         }
+        .recipient-link {
+            color: #3182ce;
+            text-decoration: none;
+        }
+        .recipient-link:hover {
+            text-decoration: underline;
+            color: #2c5282;
+        }
+        .psc-cell, .naics-cell {
+            font-size: 0.8rem;
+            color: #666;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
         .footer {
             text-align: center;
             padding: 2rem;
@@ -378,6 +394,21 @@
             </div>
         </div>
 
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>Top 10 Product/Service Categories (PSC)</h3>
+                <div class="chart-container">
+                    <canvas id="pscChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Top 10 Industries (NAICS)</h3>
+                <div class="chart-container">
+                    <canvas id="naicsChart"></canvas>
+                </div>
+            </div>
+        </div>
+
         <div class="table-section">
             <div class="table-controls">
                 <div class="tabs">
@@ -393,13 +424,15 @@
                         <tr>
                             <th class="sortable" data-sort="agency" onclick="sortTable('agency')">Agency</th>
                             <th class="sortable" data-sort="recipient" onclick="sortTable('recipient')">Recipient</th>
-                            <th class="sortable" data-sort="amount" onclick="sortTable('amount')" style="text-align: right;">Obligation Amount</th>
+                            <th class="sortable" data-sort="amount" onclick="sortTable('amount')" style="text-align: right;">Amount</th>
                             <th class="sortable" data-sort="date" onclick="sortTable('date')">Date</th>
+                            <th class="sortable" data-sort="psc" onclick="sortTable('psc')">PSC</th>
+                            <th class="sortable" data-sort="naics" onclick="sortTable('naics')">NAICS</th>
                             <th>Description</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="5" class="loading">Loading data...</td></tr>
+                        <tr><td colspan="7" class="loading">Loading data...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -428,6 +461,8 @@
         let agencyChartInstance = null;
         let cbpRecipientsChartInstance = null;
         let iceRecipientsChartInstance = null;
+        let pscChartInstance = null;
+        let naicsChartInstance = null;
 
         // Fiscal year date ranges
         const fyDates = {
@@ -598,6 +633,8 @@
             if (agencyChartInstance) { agencyChartInstance.destroy(); agencyChartInstance = null; }
             if (cbpRecipientsChartInstance) { cbpRecipientsChartInstance.destroy(); cbpRecipientsChartInstance = null; }
             if (iceRecipientsChartInstance) { iceRecipientsChartInstance.destroy(); iceRecipientsChartInstance = null; }
+            if (pscChartInstance) { pscChartInstance.destroy(); pscChartInstance = null; }
+            if (naicsChartInstance) { naicsChartInstance.destroy(); naicsChartInstance = null; }
         }
 
         function processData() {
@@ -607,6 +644,8 @@
             let cbpTotal = 0, iceTotal = 0, cbpCount = 0, iceCount = 0;
             const cbpByRecipient = {}, iceByRecipient = {};
             const monthlyData = {};
+            const pscData = {};
+            const naicsData = {};
 
             allData.forEach(row => {
                 const amount = parseFloat(row['Federal Action Obligation']) || 0;
@@ -614,6 +653,8 @@
                 const recipient = row['Recipient Name'] || 'Unknown';
                 const date = row['Action Date'] || '';
                 const month = date.substring(0, 7);
+                const psc = row['Product/Service Description'] || 'Unspecified';
+                const naics = row['NAICS Description'] || 'Unspecified';
 
                 if (agency === 'CBP') {
                     cbpTotal += amount;
@@ -635,6 +676,14 @@
                         monthlyData[month].ice += amount;
                     }
                 }
+
+                // Aggregate PSC and NAICS
+                if (psc && psc !== 'Unspecified') {
+                    pscData[psc] = (pscData[psc] || 0) + amount;
+                }
+                if (naics && naics !== 'Unspecified') {
+                    naicsData[naics] = (naicsData[naics] || 0) + amount;
+                }
             });
 
             // Update summary cards
@@ -650,6 +699,8 @@
             createAgencyChart(cbpTotal, iceTotal);
             createRecipientChart('cbpRecipientsChart', cbpByRecipient, '#3182ce', 'cbp');
             createRecipientChart('iceRecipientsChart', iceByRecipient, '#e53e3e', 'ice');
+            createCategoryChart('pscChart', pscData, '#805ad5', 'psc');
+            createCategoryChart('naicsChart', naicsData, '#dd6b20', 'naics');
 
             // Populate table
             filteredData = [...allData];
@@ -796,6 +847,59 @@
             }
         }
 
+        function createCategoryChart(canvasId, categoryData, color, type) {
+            const sorted = Object.entries(categoryData)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            const ctx = document.getElementById(canvasId).getContext('2d');
+
+            const chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(r => r[0].length > 30 ? r[0].substring(0, 30) + '...' : r[0]),
+                    datasets: [{
+                        data: sorted.map(r => r[1]),
+                        backgroundColor: color,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    return sorted[context[0].dataIndex][0];
+                                },
+                                label: function(context) {
+                                    return formatCurrency(context.raw);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                callback: function(value) {
+                                    return formatCurrency(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (type === 'psc') {
+                pscChartInstance = chart;
+            } else {
+                naicsChartInstance = chart;
+            }
+        }
+
         function showTable(filter) {
             currentFilter = filter;
             document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
@@ -830,7 +934,7 @@
             const toShow = filteredData.slice(0, displayedRows);
 
             if (toShow.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="loading">No transactions found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="loading">No transactions found</td></tr>';
                 document.getElementById('showingCount').textContent = '';
                 document.getElementById('loadMoreBtn').style.display = 'none';
                 return;
@@ -841,13 +945,21 @@
                 const amountClass = amount >= 0 ? 'positive' : 'negative';
                 const agencyClass = row.Agency.toLowerCase();
                 const description = row['Transaction Description'] || row['Product/Service Description'] || '';
+                const psc = row['Product/Service Description'] || '';
+                const naics = row['NAICS Description'] || '';
+                const awardId = row['Award ID'] || '';
+
+                // Build USAspending link
+                const usaSpendingLink = awardId ? `https://www.usaspending.gov/award/${encodeURIComponent(awardId)}` : '';
 
                 return `<tr>
                     <td><span class="agency-badge ${agencyClass}">${row.Agency}</span></td>
-                    <td>${row['Recipient Name'] || 'Unknown'}</td>
+                    <td>${usaSpendingLink ? `<a href="${usaSpendingLink}" target="_blank" class="recipient-link">${row['Recipient Name'] || 'Unknown'}</a>` : (row['Recipient Name'] || 'Unknown')}</td>
                     <td class="amount-cell ${amountClass}">${formatFullCurrency(amount)}</td>
                     <td>${row['Action Date'] || ''}</td>
-                    <td title="${description}">${description.length > 60 ? description.substring(0, 60) + '...' : description}</td>
+                    <td class="psc-cell" title="${psc}">${psc.length > 20 ? psc.substring(0, 20) + '...' : psc}</td>
+                    <td class="naics-cell" title="${naics}">${naics.length > 20 ? naics.substring(0, 20) + '...' : naics}</td>
+                    <td title="${description}">${description.length > 40 ? description.substring(0, 40) + '...' : description}</td>
                 </tr>`;
             }).join('');
 
@@ -910,6 +1022,14 @@
                         valA = a['Action Date'] || '';
                         valB = b['Action Date'] || '';
                         break;
+                    case 'psc':
+                        valA = (a['Product/Service Description'] || '').toLowerCase();
+                        valB = (b['Product/Service Description'] || '').toLowerCase();
+                        break;
+                    case 'naics':
+                        valA = (a['NAICS Description'] || '').toLowerCase();
+                        valB = (b['NAICS Description'] || '').toLowerCase();
+                        break;
                     default:
                         return 0;
                 }
@@ -927,15 +1047,22 @@
                 return;
             }
 
-            const headers = ['Agency', 'Award ID', 'Recipient Name', 'Federal Action Obligation', 'Action Date', 'Description'];
-            const rows = allData.map(row => [
-                row.Agency || '',
-                row['Award ID'] || '',
-                `"${(row['Recipient Name'] || '').replace(/"/g, '""')}"`,
-                row['Federal Action Obligation'] || 0,
-                row['Action Date'] || '',
-                `"${(row['Transaction Description'] || row['Product/Service Description'] || '').replace(/"/g, '""')}"`
-            ]);
+            const headers = ['Agency', 'Award ID', 'Recipient Name', 'Federal Action Obligation', 'Action Date', 'PSC Description', 'NAICS Description', 'Transaction Description', 'USAspending Link'];
+            const rows = allData.map(row => {
+                const awardId = row['Award ID'] || '';
+                const link = awardId ? `https://www.usaspending.gov/award/${encodeURIComponent(awardId)}` : '';
+                return [
+                    row.Agency || '',
+                    awardId,
+                    `"${(row['Recipient Name'] || '').replace(/"/g, '""')}"`,
+                    row['Federal Action Obligation'] || 0,
+                    row['Action Date'] || '',
+                    `"${(row['Product/Service Description'] || '').replace(/"/g, '""')}"`,
+                    `"${(row['NAICS Description'] || '').replace(/"/g, '""')}"`,
+                    `"${(row['Transaction Description'] || '').replace(/"/g, '""')}"`,
+                    link
+                ];
+            });
 
             const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
