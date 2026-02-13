@@ -206,6 +206,7 @@
         }
         td {
             font-size: 0.9rem;
+            vertical-align: top;
         }
         tr:hover {
             background: #f7fafc;
@@ -213,6 +214,7 @@
         .amount-cell {
             font-family: 'SF Mono', Monaco, monospace;
             text-align: right;
+            white-space: nowrap;
         }
         .positive {
             color: #38a169;
@@ -246,10 +248,17 @@
         .psc-cell, .naics-cell {
             font-size: 0.8rem;
             color: #666;
-            max-width: 150px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            max-width: 200px;
+            word-wrap: break-word;
+            white-space: normal;
+            line-height: 1.3;
+        }
+        .description-cell {
+            font-size: 0.85rem;
+            max-width: 300px;
+            word-wrap: break-word;
+            white-space: normal;
+            line-height: 1.3;
         }
         .footer {
             text-align: center;
@@ -854,10 +863,29 @@
 
             const ctx = document.getElementById(canvasId).getContext('2d');
 
+            // Helper to wrap long labels
+            function wrapLabel(str, maxWidth) {
+                if (str.length <= maxWidth) return [str];
+                const words = str.split(/[\s-]+/);
+                const lines = [];
+                let currentLine = '';
+
+                words.forEach(word => {
+                    if ((currentLine + ' ' + word).trim().length <= maxWidth) {
+                        currentLine = (currentLine + ' ' + word).trim();
+                    } else {
+                        if (currentLine) lines.push(currentLine);
+                        currentLine = word.length > maxWidth ? word.substring(0, maxWidth - 3) + '...' : word;
+                    }
+                });
+                if (currentLine) lines.push(currentLine);
+                return lines.slice(0, 3); // Max 3 lines
+            }
+
             const chart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: sorted.map(r => r[0].length > 30 ? r[0].substring(0, 30) + '...' : r[0]),
+                    labels: sorted.map(r => wrapLabel(r[0], 40)),
                     datasets: [{
                         data: sorted.map(r => r[1]),
                         backgroundColor: color,
@@ -882,6 +910,12 @@
                         }
                     },
                     scales: {
+                        y: {
+                            ticks: {
+                                font: { size: 11 },
+                                autoSkip: false
+                            }
+                        },
                         x: {
                             ticks: {
                                 callback: function(value) {
@@ -956,10 +990,10 @@
                     <td><span class="agency-badge ${agencyClass}">${row.Agency}</span></td>
                     <td>${usaSpendingLink ? `<a href="${usaSpendingLink}" target="_blank" class="recipient-link">${row['Recipient Name'] || 'Unknown'}</a>` : (row['Recipient Name'] || 'Unknown')}</td>
                     <td class="amount-cell ${amountClass}">${formatFullCurrency(amount)}</td>
-                    <td>${row['Action Date'] || ''}</td>
-                    <td class="psc-cell" title="${psc}">${psc.length > 20 ? psc.substring(0, 20) + '...' : psc}</td>
-                    <td class="naics-cell" title="${naics}">${naics.length > 20 ? naics.substring(0, 20) + '...' : naics}</td>
-                    <td title="${description}">${description.length > 40 ? description.substring(0, 40) + '...' : description}</td>
+                    <td style="white-space: nowrap;">${row['Action Date'] || ''}</td>
+                    <td class="psc-cell">${psc}</td>
+                    <td class="naics-cell">${naics}</td>
+                    <td class="description-cell">${description}</td>
                 </tr>`;
             }).join('');
 
