@@ -48,6 +48,21 @@
         .fy-selector select:hover {
             background: #edf2f7;
         }
+        .export-btn {
+            margin-left: 1rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            border: none;
+            border-radius: 6px;
+            background: #38a169;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .export-btn:hover {
+            background: #2f855a;
+        }
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -275,6 +290,7 @@
         <p>Federal Action Obligations | Data Source: USAspending.gov</p>
         <div class="fy-selector">
             <select id="fySelect" onchange="changeFiscalYear()">
+                <option value="trump2">Since Jan 20, 2025 (Trump Admin)</option>
                 <option value="2026">FY 2026 (Oct 2025 - Sep 2026)</option>
                 <option value="2025">FY 2025 (Oct 2024 - Sep 2025)</option>
                 <option value="2024">FY 2024 (Oct 2023 - Sep 2024)</option>
@@ -282,6 +298,7 @@
                 <option value="2022">FY 2022 (Oct 2021 - Sep 2022)</option>
                 <option value="2021">FY 2021 (Oct 2020 - Sep 2021)</option>
             </select>
+            <button class="export-btn" onclick="exportToCSV()">Export CSV</button>
         </div>
     </div>
 
@@ -386,6 +403,7 @@
 
         // Fiscal year date ranges
         const fyDates = {
+            'trump2': { start: '2025-01-20', end: '2026-09-30', label: 'Since January 20, 2025 (Trump Administration)', isSpecial: true },
             '2026': { start: '2025-10-01', end: '2026-09-30', label: 'FY26: October 1, 2025 - September 30, 2026' },
             '2025': { start: '2024-10-01', end: '2025-09-30', label: 'FY25: October 1, 2024 - September 30, 2025' },
             '2024': { start: '2023-10-01', end: '2024-09-30', label: 'FY24: October 1, 2023 - September 30, 2024' },
@@ -401,8 +419,9 @@
         function changeFiscalYear() {
             const select = document.getElementById('fySelect');
             currentFY = select.value;
-            document.getElementById('loadingFY').textContent = 'FY' + currentFY.slice(-2);
-            document.getElementById('fyDateRange').textContent = fyDates[currentFY].label;
+            const fyConfig = fyDates[currentFY];
+            document.getElementById('loadingFY').textContent = fyConfig.isSpecial ? 'Trump Admin' : 'FY' + currentFY.slice(-2);
+            document.getElementById('fyDateRange').textContent = fyConfig.label;
             loadData();
         }
 
@@ -429,6 +448,14 @@
         async function loadData() {
             showLoading(true);
 
+            const fyConfig = fyDates[currentFY];
+
+            // Special handling for "Since Jan 20, 2025" - need to load FY25 and FY26 and filter
+            if (fyConfig.isSpecial) {
+                await loadSpecialDateRange(fyConfig.start);
+                return;
+            }
+
             // Try to load from CSV file first
             const csvFile = `data/CBP_ICE_FY${currentFY}_Contract_Obligations.csv`;
 
@@ -452,6 +479,34 @@
 
             // Fall back to API
             await fetchFromAPI();
+        }
+
+        // Load data from multiple fiscal years and filter by date
+        async function loadSpecialDateRange(startDate) {
+            allData = [];
+            const filesToLoad = ['2025', '2026'];
+
+            for (const fy of filesToLoad) {
+                const csvFile = `data/CBP_ICE_FY${fy}_Contract_Obligations.csv`;
+                try {
+                    const response = await fetch(csvFile);
+                    if (response.ok) {
+                        const csvText = await response.text();
+                        const parsed = Papa.parse(csvText, { header: true });
+                        const filtered = parsed.data.filter(row => {
+                            if (!row.Agency || !row['Federal Action Obligation']) return false;
+                            const actionDate = row['Action Date'] || '';
+                            return actionDate >= startDate;
+                        });
+                        allData = allData.concat(filtered);
+                    }
+                } catch (error) {
+                    console.log(`Could not load FY${fy} data`);
+                }
+            }
+
+            processData();
+            showLoading(false);
         }
 
         async function fetchFromAPI() {
@@ -773,6 +828,40 @@
         function loadMore() {
             displayedRows += 50;
             renderTable();
+        }
+
+        // Export current data to CSV
+        function exportToCSV() {
+            if (allData.length === 0) {
+                alert('No data to export');
+                return;
+            }
+
+            const headers = ['Agency', 'Award ID', 'Recipient Name', 'Federal Action Obligation', 'Action Date', 'Description'];
+            const rows = allData.map(row => [
+                row.Agency || '',
+                row['Award ID'] || '',
+                `"${(row['Recipient Name'] || '').replace(/"/g, '""')}"`,
+                row['Federal Action Obligation'] || 0,
+                row['Action Date'] || '',
+                `"${(row['Transaction Description'] || row['Product/Service Description'] || '').replace(/"/g, '""')}"`
+            ]);
+
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+
+            const fyConfig = fyDates[currentFY];
+            const filename = fyConfig.isSpecial
+                ? 'CBP_ICE_Since_Jan20_2025.csv'
+                : `CBP_ICE_FY${currentFY}_Contract_Obligations.csv`;
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+
+            URL.revokeObjectURL(url);
         }
 
         // Initialize
