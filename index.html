@@ -422,6 +422,15 @@
             </div>
         </div>
 
+        <div class="chart-card" style="margin-bottom: 2rem;">
+            <h3>🔫 Weapons-Related Spending by Fiscal Year (CBP & ICE)</h3>
+            <p style="font-size: 0.85rem; color: #666; margin-bottom: 1rem;">Includes firearms, ammunition, body armor, armored vehicles, tasers, OC spray, holsters, sights, and tactical equipment</p>
+            <div class="chart-container">
+                <canvas id="weaponsChart"></canvas>
+            </div>
+            <div id="weaponsSummary" style="margin-top: 1rem; padding: 1rem; background: #f7fafc; border-radius: 8px; font-size: 0.9rem;"></div>
+        </div>
+
         <div class="table-section">
             <div class="table-controls">
                 <div class="tabs">
@@ -476,6 +485,7 @@
         let iceRecipientsChartInstance = null;
         let pscChartInstance = null;
         let naicsChartInstance = null;
+        let weaponsChartInstance = null;
 
         // Fiscal year date ranges
         const fyDates = {
@@ -647,6 +657,7 @@
             if (cbpRecipientsChartInstance) { cbpRecipientsChartInstance.destroy(); cbpRecipientsChartInstance = null; }
             if (iceRecipientsChartInstance) { iceRecipientsChartInstance.destroy(); iceRecipientsChartInstance = null; }
             if (pscChartInstance) { pscChartInstance.destroy(); pscChartInstance = null; }
+            if (weaponsChartInstance) { weaponsChartInstance.destroy(); weaponsChartInstance = null; }
             if (naicsChartInstance) { naicsChartInstance.destroy(); naicsChartInstance = null; }
         }
 
@@ -1127,8 +1138,126 @@
             URL.revokeObjectURL(url);
         }
 
+        // Weapons-related keywords for filtering
+        const weaponsKeywords = ['weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'munition', 'pistol', 'rifle', 'shotgun', 'armament', 'armor', 'ordnance', 'small arms', 'handgun', 'sights', 'holster', 'oc spray', 'pepper ball', 'less-lethal', 'duty weapon', 'taser'];
+
+        function isWeaponsRelated(row) {
+            const text = ((row['Product/Service Description'] || '') + ' ' +
+                         (row['NAICS Description'] || '') + ' ' +
+                         (row['Transaction Description'] || '')).toLowerCase();
+            return weaponsKeywords.some(kw => text.includes(kw));
+        }
+
+        // Load weapons data from all fiscal years
+        async function loadWeaponsData() {
+            const fiscalYears = ['2021', '2022', '2023', '2024', '2025', '2026'];
+            const weaponsData = {};
+
+            for (const fy of fiscalYears) {
+                weaponsData[fy] = { cbp: 0, ice: 0, cbpCount: 0, iceCount: 0 };
+
+                try {
+                    const response = await fetch(`data/CBP_ICE_FY${fy}_Contract_Obligations.csv`);
+                    if (response.ok) {
+                        const csvText = await response.text();
+                        const parsed = Papa.parse(csvText, { header: true });
+
+                        parsed.data.forEach(row => {
+                            if (row.Agency && isWeaponsRelated(row)) {
+                                const amount = parseFloat(row['Federal Action Obligation']) || 0;
+                                if (row.Agency === 'CBP') {
+                                    weaponsData[fy].cbp += amount;
+                                    weaponsData[fy].cbpCount++;
+                                } else if (row.Agency === 'ICE') {
+                                    weaponsData[fy].ice += amount;
+                                    weaponsData[fy].iceCount++;
+                                }
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.log(`Could not load FY${fy} for weapons chart`);
+                }
+            }
+
+            createWeaponsChart(weaponsData);
+        }
+
+        function createWeaponsChart(data) {
+            if (weaponsChartInstance) {
+                weaponsChartInstance.destroy();
+                weaponsChartInstance = null;
+            }
+
+            const fiscalYears = ['2021', '2022', '2023', '2024', '2025', '2026'];
+            const cbpAmounts = fiscalYears.map(fy => data[fy].cbp);
+            const iceAmounts = fiscalYears.map(fy => data[fy].ice);
+
+            const ctx = document.getElementById('weaponsChart').getContext('2d');
+            weaponsChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: fiscalYears.map(fy => 'FY' + fy.slice(-2)),
+                    datasets: [
+                        {
+                            label: 'CBP',
+                            data: cbpAmounts,
+                            backgroundColor: '#3182ce',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'ICE',
+                            data: iceAmounts,
+                            backgroundColor: '#e53e3e',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + formatCurrency(context.raw);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatCurrency(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Calculate totals and update summary
+            let totalCBP = 0, totalICE = 0, totalCBPCount = 0, totalICECount = 0;
+            fiscalYears.forEach(fy => {
+                totalCBP += data[fy].cbp;
+                totalICE += data[fy].ice;
+                totalCBPCount += data[fy].cbpCount;
+                totalICECount += data[fy].iceCount;
+            });
+
+            document.getElementById('weaponsSummary').innerHTML = `
+                <strong>Total Weapons Spending (FY21-26):</strong><br>
+                <span style="color: #3182ce;">● CBP: ${formatFullCurrency(totalCBP)} (${totalCBPCount.toLocaleString()} transactions)</span><br>
+                <span style="color: #e53e3e;">● ICE: ${formatFullCurrency(totalICE)} (${totalICECount.toLocaleString()} transactions)</span><br>
+                <strong>Combined: ${formatFullCurrency(totalCBP + totalICE)} (${(totalCBPCount + totalICECount).toLocaleString()} transactions)</strong>
+            `;
+        }
+
         // Initialize
         loadData();
+        loadWeaponsData();
     </script>
 </body>
 </html>
