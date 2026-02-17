@@ -127,6 +127,10 @@
             position: relative;
             height: 350px;
         }
+        .chart-container-tall {
+            position: relative;
+            height: 500px;
+        }
         .table-section {
             background: white;
             border-radius: 12px;
@@ -406,13 +410,13 @@
         <div class="charts-grid">
             <div class="chart-card">
                 <h3>Top 10 Product/Service Categories (PSC)</h3>
-                <div class="chart-container">
+                <div class="chart-container-tall">
                     <canvas id="pscChart"></canvas>
                 </div>
             </div>
             <div class="chart-card">
                 <h3>Top 10 Industries (NAICS)</h3>
-                <div class="chart-container">
+                <div class="chart-container-tall">
                     <canvas id="naicsChart"></canvas>
                 </div>
             </div>
@@ -863,9 +867,9 @@
 
             const ctx = document.getElementById(canvasId).getContext('2d');
 
-            // Helper to wrap long labels
+            // Helper to wrap long labels into multiple lines
             function wrapLabel(str, maxWidth) {
-                if (str.length <= maxWidth) return [str];
+                if (!str || str.length <= maxWidth) return [str || ''];
                 const words = str.split(/[\s-]+/);
                 const lines = [];
                 let currentLine = '';
@@ -879,23 +883,27 @@
                     }
                 });
                 if (currentLine) lines.push(currentLine);
-                return lines.slice(0, 3); // Max 3 lines
+                return lines.slice(0, 2); // Max 2 lines
             }
 
             const chart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: sorted.map(r => wrapLabel(r[0], 40)),
+                    labels: sorted.map(r => wrapLabel(r[0], 30)),
                     datasets: [{
                         data: sorted.map(r => r[1]),
                         backgroundColor: color,
-                        borderRadius: 4
+                        borderRadius: 4,
+                        barThickness: 25
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     indexAxis: 'y',
+                    layout: {
+                        padding: { left: 10 }
+                    },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -912,8 +920,12 @@
                     scales: {
                         y: {
                             ticks: {
-                                font: { size: 11 },
-                                autoSkip: false
+                                font: { size: 10 },
+                                autoSkip: false,
+                                padding: 5
+                            },
+                            afterFit: function(scale) {
+                                scale.width = 200; // Fixed width for labels
                             }
                         },
                         x: {
