@@ -543,10 +543,11 @@
             }
 
             // Try to load from CSV file first
-            const csvFile = `data/CBP_ICE_FY${currentFY}_Contract_Obligations.csv`;
+            const cacheBust = Date.now();
+            const csvFile = `data/CBP_ICE_FY${currentFY}_Contract_Obligations.csv?v=${cacheBust}`;
 
             try {
-                const response = await fetch(csvFile);
+                const response = await fetch(csvFile, { cache: 'no-store' });
                 if (response.ok) {
                     const csvText = await response.text();
                     Papa.parse(csvText, {
@@ -573,9 +574,9 @@
             const filesToLoad = ['2025', '2026'];
 
             for (const fy of filesToLoad) {
-                const csvFile = `data/CBP_ICE_FY${fy}_Contract_Obligations.csv`;
+                const csvFile = `data/CBP_ICE_FY${fy}_Contract_Obligations.csv?v=${Date.now()}`;
                 try {
-                    const response = await fetch(csvFile);
+                    const response = await fetch(csvFile, { cache: 'no-store' });
                     if (response.ok) {
                         const csvText = await response.text();
                         const parsed = Papa.parse(csvText, { header: true });
@@ -1157,7 +1158,7 @@
                 weaponsData[fy] = { cbp: 0, ice: 0, cbpCount: 0, iceCount: 0 };
 
                 try {
-                    const response = await fetch(`data/CBP_ICE_FY${fy}_Contract_Obligations.csv`);
+                    const response = await fetch(`data/CBP_ICE_FY${fy}_Contract_Obligations.csv?v=${Date.now()}`, { cache: 'no-store' });
                     if (response.ok) {
                         const csvText = await response.text();
                         const parsed = Papa.parse(csvText, { header: true });
