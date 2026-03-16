@@ -1278,20 +1278,9 @@
             `;
         }
 
-        // Reload latest CSV data from GitHub without a page refresh
-        async function triggerRefresh() {
-            const btn = document.getElementById('refreshBtn');
-            const status = document.getElementById('refreshStatus');
-            btn.disabled = true;
-            btn.textContent = 'Loading...';
-            status.textContent = '';
-
-            await loadData();
-            await loadWeaponsData();
-
-            btn.disabled = false;
-            btn.textContent = 'Refresh Data';
-            status.textContent = 'Data reloaded — last updated ' + new Date().toLocaleTimeString();
+        // Reload the page to get latest data
+        function triggerRefresh() {
+            window.location.reload(true);
         }
 
         // Initialize
