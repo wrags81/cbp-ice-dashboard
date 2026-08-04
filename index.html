@@ -83,6 +83,12 @@
             opacity: 0.9;
             min-height: 1.2em;
         }
+        .last-updated {
+            margin-top: 0.35rem;
+            font-size: 0.85rem;
+            opacity: 0.85;
+            min-height: 1.2em;
+        }
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -378,6 +384,7 @@
             <button class="refresh-btn" id="refreshBtn" onclick="triggerRefresh()">Refresh Data</button>
         </div>
         <div class="refresh-status" id="refreshStatus"></div>
+        <div class="last-updated" id="lastUpdated"></div>
     </div>
 
     <div class="container">
@@ -684,8 +691,25 @@
             if (naicsChartInstance) { naicsChartInstance.destroy(); naicsChartInstance = null; }
         }
 
+        function updateLastUpdated() {
+            const el = document.getElementById('lastUpdated');
+            if (!el || !allData.length) { if (el) el.textContent = ''; return; }
+            let maxDate = '';
+            for (const row of allData) {
+                const d = row['Action Date'];
+                if (d && d > maxDate) maxDate = d;
+            }
+            if (!maxDate) { el.textContent = ''; return; }
+            // Parse as local date to avoid UTC off-by-one
+            const [y, m, d] = maxDate.split('-').map(Number);
+            const dt = new Date(y, m - 1, d);
+            const pretty = dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            el.textContent = `Data through: ${pretty}`;
+        }
+
         function processData() {
             destroyCharts();
+            updateLastUpdated();
 
             // Calculate totals
             let cbpTotal = 0, iceTotal = 0, cbpCount = 0, iceCount = 0;
