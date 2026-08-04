@@ -1,9 +1,16 @@
-name: Weekly Data Update
+name: Daily Data Update
 
 on:
   schedule:
-    - cron: '0 8 * * 1'  # Every Monday at 8am UTC (3am ET)
-  workflow_dispatch:       # Also allows manual trigger from GitHub UI
+    - cron: '0 10 * * *'  # Daily at 10:00 UTC (6am ET / 5am ET during DST)
+  workflow_dispatch:       # Manual trigger from GitHub UI
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # Required to push commits back to main
 
 jobs:
   update-data:
@@ -24,7 +31,10 @@ jobs:
       - name: Fetch latest FY2026 data
         run: python3 fetch_and_build.py 2026
 
+      # FY2025 is closed; late modifications are rare. Allow this step to
+      # fail without blocking the FY2026 commit.
       - name: Fetch latest FY2025 data
+        continue-on-error: true
         run: python3 fetch_and_build.py 2025
 
       - name: Commit and push if data changed
@@ -35,6 +45,9 @@ jobs:
           if git diff --staged --quiet; then
             echo "No new data to commit."
           else
-            git commit -m "Auto-update data $(date +'%Y-%m-%d')"
+            latest=$(python3 -c "import csv; \
+              rows = list(csv.DictReader(open('data/CBP_ICE_FY2026_Contract_Obligations.csv'))); \
+              print(sorted({r['Action Date'] for r in rows if r['Action Date']})[-1])")
+            git commit -m "Auto-update FY2026 CBP/ICE data through ${latest}"
             git push
           fi

@@ -7,6 +7,7 @@ Saves data to CSV files for the dashboard
 import requests
 import csv
 import os
+import time
 from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -60,13 +61,28 @@ def fetch_transactions(agency_name, agency_abbrev, fy_start, fy_end):
             "order": "desc"
         }
 
-        try:
-            response = requests.post(url, json=payload, timeout=60)
-            response.raise_for_status()
-            data = response.json()
-        except Exception as e:
-            print(f"    Error on page {page}: {e}")
-            break
+        # Retry transient API errors (timeouts, 5xx) instead of silently
+        # returning partial data. If every attempt fails, raise — the caller
+        # will exit non-zero and the workflow will NOT overwrite the CSV.
+        data = None
+        last_err = None
+        for attempt in range(4):
+            try:
+                response = requests.post(url, json=payload, timeout=90)
+                response.raise_for_status()
+                data = response.json()
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                if attempt < 3:
+                    wait = 2 ** (attempt + 1)
+                    print(f"    Page {page} attempt {attempt+1} failed ({e}); retrying in {wait}s")
+                    time.sleep(wait)
+        if last_err is not None:
+            raise RuntimeError(
+                f"{agency_abbrev} page {page} failed after 4 attempts: {last_err}"
+            )
 
         results = data.get("results", [])
         all_results.extend(results)
