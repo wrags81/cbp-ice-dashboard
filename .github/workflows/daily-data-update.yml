@@ -5,10 +5,6 @@ on:
     - cron: '0 10 * * *'  # Daily at 10:00 UTC (6am ET / 5am ET during DST)
   workflow_dispatch:       # Manual trigger from GitHub UI
 
-concurrency:
-  group: update-data
-  cancel-in-progress: false
-
 permissions:
   contents: write            # Required to push commits back to main
 
