@@ -373,6 +373,7 @@
         <div class="fy-selector">
             <select id="fySelect" onchange="changeFiscalYear()">
                 <option value="trump2">Since Jan 20, 2025 (Trump Admin)</option>
+                <option value="2027">FY 2027 (Oct 2026 - Sep 2027)</option>
                 <option value="2026">FY 2026 (Oct 2025 - Sep 2026)</option>
                 <option value="2025">FY 2025 (Oct 2024 - Sep 2025)</option>
                 <option value="2024">FY 2024 (Oct 2023 - Sep 2024)</option>
@@ -518,7 +519,8 @@
 
         // Fiscal year date ranges
         const fyDates = {
-            'trump2': { start: '2025-01-20', end: '2026-09-30', label: 'Since January 20, 2025 (Trump Administration)', isSpecial: true },
+            'trump2': { start: '2025-01-20', end: '2027-09-30', label: 'Since January 20, 2025 (Trump Administration)', isSpecial: true },
+            '2027': { start: '2026-10-01', end: '2027-09-30', label: 'FY27: October 1, 2026 - September 30, 2027' },
             '2026': { start: '2025-10-01', end: '2026-09-30', label: 'FY26: October 1, 2025 - September 30, 2026' },
             '2025': { start: '2024-10-01', end: '2025-09-30', label: 'FY25: October 1, 2024 - September 30, 2025' },
             '2024': { start: '2023-10-01', end: '2024-09-30', label: 'FY24: October 1, 2023 - September 30, 2024' },
@@ -600,7 +602,7 @@
         // Load data from multiple fiscal years and filter by date
         async function loadSpecialDateRange(startDate) {
             allData = [];
-            const filesToLoad = ['2025', '2026'];
+            const filesToLoad = ['2025', '2026', '2027'];
 
             for (const fy of filesToLoad) {
                 const csvFile = `data/CBP_ICE_FY${fy}_Contract_Obligations.csv?v=${Date.now()}`;
@@ -1197,7 +1199,7 @@
 
         // Load weapons data from all fiscal years
         async function loadWeaponsData() {
-            const fiscalYears = ['2021', '2022', '2023', '2024', '2025', '2026'];
+            const fiscalYears = ['2021', '2022', '2023', '2024', '2025', '2026', '2027'];
             const weaponsData = {};
 
             for (const fy of fiscalYears) {
@@ -1236,7 +1238,7 @@
                 weaponsChartInstance = null;
             }
 
-            const fiscalYears = ['2021', '2022', '2023', '2024', '2025', '2026'];
+            const fiscalYears = ['2021', '2022', '2023', '2024', '2025', '2026', '2027'];
             const cbpAmounts = fiscalYears.map(fy => data[fy].cbp);
             const iceAmounts = fiscalYears.map(fy => data[fy].ice);
 

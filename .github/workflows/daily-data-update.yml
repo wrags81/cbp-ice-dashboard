@@ -24,14 +24,14 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Fetch latest FY2026 data
-        run: python3 fetch_and_build.py 2026
+      - name: Fetch latest FY2027 data (current fiscal year)
+        run: python3 fetch_and_build.py 2027
 
-      # FY2025 is closed; late modifications are rare. Allow this step to
-      # fail without blocking the FY2026 commit.
-      - name: Fetch latest FY2025 data
+      # FY2026 closed Sept 30, 2026; late modifications still land occasionally.
+      # Allow this step to fail without blocking the FY2027 commit.
+      - name: Fetch latest FY2026 data
         continue-on-error: true
-        run: python3 fetch_and_build.py 2025
+        run: python3 fetch_and_build.py 2026
 
       - name: Commit and push if data changed
         run: |
@@ -42,8 +42,9 @@ jobs:
             echo "No new data to commit."
           else
             latest=$(python3 -c "import csv; \
-              rows = list(csv.DictReader(open('data/CBP_ICE_FY2026_Contract_Obligations.csv'))); \
-              print(sorted({r['Action Date'] for r in rows if r['Action Date']})[-1])")
-            git commit -m "Auto-update FY2026 CBP/ICE data through ${latest}"
+              rows = list(csv.DictReader(open('data/CBP_ICE_FY2027_Contract_Obligations.csv'))); \
+              dates = sorted({r['Action Date'] for r in rows if r['Action Date']}); \
+              print(dates[-1] if dates else 'empty')")
+            git commit -m "Auto-update FY2027 CBP/ICE data through ${latest}"
             git push
           fi

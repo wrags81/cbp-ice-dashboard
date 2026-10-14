@@ -15,6 +15,7 @@ DATA_DIR = os.path.join(SCRIPT_DIR, "data")
 
 # Fiscal year configurations
 FISCAL_YEARS = {
+    2027: {"start": "2026-10-01", "end": "2027-09-30"},
     2026: {"start": "2025-10-01", "end": "2026-09-30"},
     2025: {"start": "2024-10-01", "end": "2025-09-30"},
     2024: {"start": "2023-10-01", "end": "2024-09-30"},
