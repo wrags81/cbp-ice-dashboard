@@ -693,20 +693,41 @@
             if (naicsChartInstance) { naicsChartInstance.destroy(); naicsChartInstance = null; }
         }
 
-        function updateLastUpdated() {
+        async function updateLastUpdated() {
             const el = document.getElementById('lastUpdated');
-            if (!el || !allData.length) { if (el) el.textContent = ''; return; }
+            if (!el) return;
+            if (!allData.length) { el.textContent = ''; return; }
+
+            // "Data through" = max Action Date in the loaded rows (what USAspending has posted)
             let maxDate = '';
             for (const row of allData) {
                 const d = row['Action Date'];
                 if (d && d > maxDate) maxDate = d;
             }
-            if (!maxDate) { el.textContent = ''; return; }
-            // Parse as local date to avoid UTC off-by-one
-            const [y, m, d] = maxDate.split('-').map(Number);
-            const dt = new Date(y, m - 1, d);
-            const pretty = dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-            el.textContent = `Data through: ${pretty}`;
+            let dataThrough = '';
+            if (maxDate) {
+                const [y, m, d] = maxDate.split('-').map(Number);
+                const dt = new Date(y, m - 1, d);
+                dataThrough = dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            }
+
+            // "Last checked" = when the auto-update cron last ran (whether or not it found new data)
+            let lastChecked = '';
+            try {
+                const r = await fetch(`data/last_checked.txt?v=${Date.now()}`, { cache: 'no-store' });
+                if (r.ok) {
+                    const iso = (await r.text()).trim();
+                    const dt = new Date(iso);
+                    if (!isNaN(dt)) {
+                        lastChecked = dt.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+                    }
+                }
+            } catch (_) {}
+
+            const parts = [];
+            if (dataThrough) parts.push(`Data through: ${dataThrough}`);
+            if (lastChecked) parts.push(`Last checked: ${lastChecked}`);
+            el.textContent = parts.join('  ·  ');
         }
 
         function processData() {

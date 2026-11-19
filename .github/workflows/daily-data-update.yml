@@ -2,7 +2,9 @@ name: Daily Data Update
 
 on:
   schedule:
-    - cron: '0 10 * * *'  # Daily at 10:00 UTC (6am ET / 5am ET during DST)
+    # Every 6 hours — catches USAspending's daily batch whenever it posts,
+    # rather than missing a day if the batch lands right after our run.
+    - cron: '0 2,8,14,20 * * *'
   workflow_dispatch:       # Manual trigger from GitHub UI
 
 permissions:
@@ -33,13 +35,19 @@ jobs:
         continue-on-error: true
         run: python3 fetch_and_build.py 2026
 
-      - name: Commit and push if data changed
+      - name: Write last-checked timestamp
+        # Always write this, even when no new transactions landed. Lets the
+        # dashboard show "Last checked: X" so a quiet day looks different
+        # from a broken pipeline.
+        run: date -u +"%Y-%m-%dT%H:%M:%SZ" > data/last_checked.txt
+
+      - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
           if git diff --staged --quiet; then
-            echo "No new data to commit."
+            echo "No changes to commit."
           else
             latest=$(python3 -c "import csv; \
               rows = list(csv.DictReader(open('data/CBP_ICE_FY2027_Contract_Obligations.csv'))); \
